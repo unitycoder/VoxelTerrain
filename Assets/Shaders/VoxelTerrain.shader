@@ -87,14 +87,14 @@
             o.Albedo = tex2D(_WaterTex, IN.uv_WaterTex).rgb;
 			
 			
-        //o.Albedo = float4(1,0,0,1);
-        o.Albedo *= saturate(IN.customColor + _Slope);   
+		// doesnt work
+	    o.Albedo *= saturate(IN.customColor + _Slope);
 
 
-			// Metallic and smoothness come from slider variables
-			o.Metallic = _Metallic;
-			o.Smoothness = _Glossiness;
-			o.Alpha = 1;
+		// Metallic and smoothness come from slider variables
+		o.Metallic = _Metallic;
+		o.Smoothness = _Glossiness;
+		o.Alpha = 1;
 		}
 		ENDCG
 	}

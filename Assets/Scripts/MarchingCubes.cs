@@ -1,8 +1,7 @@
-#pragma strict
+﻿// Voxel Terrain - Converted to Unity by mgear - http://unitycoder.com/blog
+// Converted to c# by "SimpleRookie" 
 
-// Voxel Terrain - Converted to Unity by mgear - http://unitycoder.com/blog *should convert this to c#..
 // Original source: http://stemkoski.github.com/Three.js/
-
 // ORIGINAL HEADER:
 /**
  * author alteredq / http://alteredqualia.com/
@@ -10,395 +9,413 @@
  * http://webglsamples.googlecode.com/hg/blob/blob.html
  */
 
-import System.Collections.Generic; // use lists
+using System.Collections.Generic;
+using UnityEngine;
 
-private var points:List.<Vector3> = new List.<Vector3>();
-private var values:List.<float> = new List.<float>();
-
-private var vertices:List.<Vector3> = new List.<Vector3>();
-private var uvs:List.<Vector2> = new List.<Vector2>();
-private var triangles:List.<int> = new List.<int>();
-private var vlist:Vector3[] = new Vector3[12];
-
-private var lineRenderer : LineRenderer;
-
-private var strength:float = 1;
-private var addStrength:float = 0.5;
-
-private var size:int = 15;     // number of cubes along a side
-private var axisMin:float = 0; // mesh size
-private var axisMax:float =  120;
-private var multiplier:int = axisMax/size;
-private var axisRange:float = axisMax - axisMin;
-
-var offset:Vector3=Vector3(0,0,0);
-
-private var size2:int=size*size;
-private    var isolevel:int=0;
-private var geometry:Mesh;
-
-function Start()
+public class MarchingCubes : MonoBehaviour
 {
-    geometry=  new Mesh();
-    GetComponent(MeshFilter).mesh = geometry;
+    private List<Vector3> points = new List<Vector3>();
+    private List<float> values = new List<float>();
 
-    lineRenderer = Camera.main.transform.GetComponent(LineRenderer);
-   
-    InitChunkPlain();
-   
-    CreateChunk();
-}
+    private List<Vector3> vertices = new List<Vector3>();
+    private List<Vector2> uvs = new List<Vector2>();
+    private List<int> triangles = new List<int>();
+    private Vector3[] vlist = new Vector3[12];
 
-function Update()
-{
+    private LineRenderer lineRenderer;
 
-    if (Input.GetKey("r")) // reset
+    private float strength = 1;
+    private float addStrength = 0.5f;
+
+    private int size = 15;     // number of cubes along a side
+    private float axisMin = 0; // mesh size
+    private float axisMax = 120;
+    private int multiplier;// = axisMax / size;
+    private float axisRange;// = axisMax - axisMin;
+
+    public Vector3 offset = new Vector3(0, 0, 0);
+
+    public float zoomSpeed = 15f;
+
+    private int size2;// = size * size;
+    private int isolevel = 0;
+    private Mesh geometry;
+
+    Camera cam;
+
+    void Start()
     {
-        SceneManagement.SceneManager.LoadScene(0);
+        cam = Camera.main;
+
+        multiplier = (int)(axisMax / size);
+        axisRange = axisMax - axisMin;
+        size2 = size * size;
+
+        geometry = new Mesh();
+        GetComponent<MeshFilter>().mesh = geometry;
+
+        lineRenderer = cam.transform.GetComponent<LineRenderer>();
+
+        InitializePlainVoxelPlane();
+
+        CreateChunk();
     }
 
-    // rotate
-    if (Input.GetKey("a"))
+    // mainloop
+    void Update()
     {
-         transform.RotateAround (Vector3(60,0,60), -Vector3.up, 50 * Time.deltaTime);
-    }
-   
-    // rotate
-    if (Input.GetKey("d"))
-    {
-         transform.RotateAround (Vector3(60,0,60), Vector3.up, 50 * Time.deltaTime);
-    }
- 
-    if (Input.GetMouseButtonUp(0))
-    {
-        lineRenderer.SetPosition(0, Camera.main.transform.position);
-        lineRenderer.SetPosition(1, Camera.main.transform.position);
-    }
-    if (Input.GetMouseButtonUp(1))
-    {
-        lineRenderer.SetPosition(0, Camera.main.transform.position);
-        lineRenderer.SetPosition(1, Camera.main.transform.position);
-    }
- 
- 
- 
-    // remove block .. with mouse
-    if (Input.GetMouseButton(1)) // button is held down
-    {
-        var ray:Ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        var hit:RaycastHit;
-        if (Physics.Raycast(ray,hit, 999))
+        // reset
+        if (Input.GetKey(KeyCode.R)) 
         {
-       
-            var localhit:Vector3 = transform.InverseTransformPoint(hit.point);
-       
-            var hx:int = localhit.x/multiplier;
-            var hy:int = localhit.y/multiplier; // -0.2 is temporary fix for clicking top plane and getting too big values..
-            var hz:int = localhit.z/multiplier;
-            //print ("Hit1:"+hx+","+hy+","+hz);
-            //            Debug.DrawLine (hit.point,hit.point+Vector3(0,1,0), Color.red,1);
-            lineRenderer.SetPosition(0, Camera.main.transform.position+Vector3(0,-1,0));
-            lineRenderer.SetPosition(1, hit.point);
-           
-			// check borders?
-            if (hx>=0 && hy>0 && hz>=0)
-                if (hx<size-1 && hy<size-1 && hz<size-1)
-                {
-                    values[hx + size * hy + size2 * hz] -= strength;
-                    values[(hx + size * hy + size2 * hz)+size] -= strength*0.1; // up
-                    CreateChunk();
-                }
+            UnityEngine.SceneManagement.SceneManager.LoadScene(0);
         }
-    }
-	
-    // add block .. with mouse
-    if (Input.GetMouseButton(0)) // button is held down
-    {
-        var ray2:Ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        var hit2:RaycastHit;
-        if (Physics.Raycast(ray2,hit2, 999))
+
+        // rotate
+        if (Input.GetKey(KeyCode.A))
         {
-       
-            var localhit2:Vector3 = transform.InverseTransformPoint(hit2.point);
-       
-            var hx2:int = localhit2.x/multiplier;
-            var hy2:int = localhit2.y/multiplier; // -0.2 is temporary fix for clicking top plane and getting too big values..
-            var hz2:int = localhit2.z/multiplier;
-            //print ("Hit:"+hx2+","+hy2+","+hz2);
-            //            Debug.DrawLine (hit.point,hit.point+Vector3(0,1,0), Color.red,1);
-            lineRenderer.SetPosition(0, Camera.main.transform.position+Vector3(0,-1,0));
-            lineRenderer.SetPosition(1, hit2.point);
-           
-            values[hx2 + size * hy2 + size2 * hz2] += addStrength;
-			values[(hx2 + size * hy2 + size2 * hz2)+size] += addStrength*0.1; // affect above point also
-                   
-            CreateChunk();
+            cam.transform.RotateAround(new Vector3(60, 0, 60), -Vector3.up, 50 * Time.deltaTime);
         }
-    }
-   
-   
-   
-}
 
+        // rotate
+        if (Input.GetKey(KeyCode.D))
+        {
+            cam.transform.RotateAround(new Vector3(60, 0, 60), Vector3.up, 50 * Time.deltaTime);
+        }
 
-function InitChunkPlain()
-{
+        if (Input.GetMouseButtonUp(0))
+        {
+            lineRenderer.SetPosition(0, Camera.main.transform.position);
+            lineRenderer.SetPosition(1, Camera.main.transform.position);
+        }
+        if (Input.GetMouseButtonUp(1))
+        {
+            lineRenderer.SetPosition(0, Camera.main.transform.position);
+            lineRenderer.SetPosition(1, Camera.main.transform.position);
+        }
 
-    for (var k = 0; k < size; k++) // z - blue
-        for (var j = 0; j < size; j++) // y - green
-            for (var i = 0; i < size; i++) // x - red
+        // zoom with mousescroll
+        var zoom = Input.GetAxis("Mouse ScrollWheel");
+        if (zoom != 0)
+        {
+            cam.transform.Translate(cam.transform.forward * (zoom * zoomSpeed),Space.World);
+        }
+
+        // remove block .. with mouse
+        if (Input.GetMouseButton(1)) // button is held down
+        {
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit;
+            if (Physics.Raycast(ray, out hit, 999f))
             {
-                // actual values
-                var x:float = axisMin + axisRange * i / (size - 1);
-                var y:float = axisMin + axisRange * j / (size - 1);
-                var z:float = axisMin + axisRange * k / (size - 1);
-				
-                points.Add(Vector3(x,y,z));
-                var value=-1;
-                var wall:float = 0;
-                //if (k==0) value=wall;
-                if (j==0) value=wall; // make wall on y==0
-                //if (i==0) value=wall;
-                //if (k==size-1) value=wall;
-                //if (j==size-1) value=wall;
-                //if (i==size-1) value=wall;
-               
-                values.Add(value);
+
+                Vector3 localhit = transform.InverseTransformPoint(hit.point);
+
+                int hx = (int)(localhit.x / multiplier);
+                int hy = (int)(localhit.y / multiplier); // -0.2 is temporary fix for clicking top plane and getting too big values..
+                int hz = (int)(localhit.z / multiplier);
+                //print ("Hit1:"+hx+","+hy+","+hz);
+                //            Debug.DrawLine (hit.point,hit.point+Vector3(0,1,0), Color.red,1);
+                lineRenderer.SetPosition(0, cam.transform.position + new Vector3(0, -1, 0));
+                lineRenderer.SetPosition(1, hit.point);
+
+                // check borders?
+                if (hx >= 0 && hy > 0 && hz >= 0)
+                    if (hx < size - 1 && hy < size - 1 && hz < size - 1)
+                    {
+                        values[hx + size * hy + size2 * hz] -= strength;
+                        values[(hx + size * hy + size2 * hz) + size] -= strength * 0.1f; // up
+                        CreateChunk();
+                    }
             }
-}
-
-function CreateChunk()
-{
-	var rr=0; // temp variable for uv map direction swapper..
-  
-    var vertexIndex = 0;
-  
-    for (var z = 0; z < size - 1; z++)
-    for (var y = 0; y < size - 1; y++)
-    for (var x = 0; x < size - 1; x++)
-    {
-        // index of base point, and also adjacent points on cube
-        var     p:float    = x + size * y + size2 * z;
-        var     px:float   = p   + 1;
-        var    py:float   = p   + size;
-        var    pxy:float  = py  + 1;
-        var    pz:float   = p   + size2;
-        var    pxz:float  = px  + size2;
-        var    pyz:float  = py  + size2;
-        var    pxyz:float = pxy + size2;
-      
-        // store scalar values corresponding to vertices
-        var       value0:float = values[ p    ];
-        var     value1:float = values[ px   ];
-        var     value2:float = values[ py   ];
-        var     value3:float = values[ pxy  ];
-        var     value4:float = values[ pz   ];
-        var     value5:float = values[ pxz  ];
-        var     value6:float = values[ pyz  ];
-        var     value7:float = values[ pxyz ];
-      
-        // place a "1" in bit positions corresponding to vertices whose
-        //   isovalue is less than given constant.
-
-        var cubeindex:int = 0;
-      
-        // if no type for ^ error:
-        // Assets/MarchingCubes/MarchingCubesA.js(77,29): BCE0051: Operator '<' cannot be used with a left hand side of type 'Object' and a right hand side of type 'int'.
-      
-        if ( value0 < isolevel ) cubeindex |= 1;
-        if ( value1 < isolevel ) cubeindex |= 2;
-        if ( value2 < isolevel ) cubeindex |= 8;
-        if ( value3 < isolevel ) cubeindex |= 4;
-        if ( value4 < isolevel ) cubeindex |= 16;
-        if ( value5 < isolevel ) cubeindex |= 32;
-        if ( value6 < isolevel ) cubeindex |= 128;
-        if ( value7 < isolevel ) cubeindex |= 64;
-      
-        // bits = 12 bit number, indicates which edges are crossed by the isosurface
-        var bits:int = THREE_edgeTable[ cubeindex ];
-      
-        // if none are crossed, proceed to next iteration
-        if ( bits == 0 ) continue;
-      
-        // check which edges are crossed, and estimate the point location
-        //    using a weighted average of scalar values at edge endpoints.
-        // store the vertex in an array for use later.
-        var mu:float = 0.5;
-      
-        // bottom of the cube
-        if ( bits & 1 )
-        {      
-            mu = ( isolevel - value0 ) / ( value1 - value0 );
-            //vlist[0] = points[p].clone().lerpSelf( points[px], mu );
-            vlist[0] = lerpSelf(points[p], points[px], mu );
-          
-          
         }
-        if ( bits & 2 )
-        {
-            mu = ( isolevel - value1 ) / ( value3 - value1 );
-//            vlist[1] = points[px].clone().lerpSelf( points[pxy], mu );
-            vlist[1] = lerpSelf(points[px], points[pxy], mu );
-        }
-        if ( bits & 4 )
-        {
-            mu = ( isolevel - value2 ) / ( value3 - value2 );
-//            vlist[2] = points[py].clone().lerpSelf( points[pxy], mu );
-            vlist[2] = lerpSelf(points[py], points[pxy], mu );
 
-        }
-        if ( bits & 8 )
+        // add block .. with mouse
+        if (Input.GetMouseButton(0)) // button is held down
         {
-            mu = ( isolevel - value0 ) / ( value2 - value0 );
-//            vlist[3] = points[p].clone().lerpSelf( points[py], mu );
-            vlist[3] = lerpSelf(points[p], points[py], mu );
+            Ray ray2 = cam.ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit2;
+            if (Physics.Raycast(ray2, out hit2, 999f))
+            {
 
-        }
-        // top of the cube
-        if ( bits & 16 )
-        {
-            mu = ( isolevel - value4 ) / ( value5 - value4 );
-//            vlist[4] = points[pz].clone().lerpSelf( points[pxz], mu );
-            vlist[4] = lerpSelf(points[pz], points[pxz], mu );
+                Vector3 localhit2 = transform.InverseTransformPoint(hit2.point);
 
-        }
-        if ( bits & 32 )
-        {
-            mu = ( isolevel - value5 ) / ( value7 - value5 );
-//            vlist[5] = points[pxz].clone().lerpSelf( points[pxyz], mu );
-            vlist[5] = lerpSelf(points[pxz], points[pxyz], mu );
+                int hx2 = (int)(localhit2.x / multiplier);
+                int hy2 = (int)(localhit2.y / multiplier); // -0.2 is temporary fix for clicking top plane and getting too big values..
+                int hz2 = (int)(localhit2.z / multiplier);
+                //print ("Hit:"+hx2+","+hy2+","+hz2);
+                //            Debug.DrawLine (hit.point,hit.point+Vector3(0,1,0), Color.red,1);
+                lineRenderer.SetPosition(0, cam.transform.position + new Vector3(0, -1, 0));
+                lineRenderer.SetPosition(1, hit2.point);
 
-        }
-        if ( bits & 64 )
-        {
-            mu = ( isolevel - value6 ) / ( value7 - value6 );
-//            vlist[6] = points[pyz].clone().lerpSelf( points[pxyz], mu );
-            vlist[6] = lerpSelf(points[pyz], points[pxyz], mu );
-        }
-        if ( bits & 128 )
-        {
-            mu = ( isolevel - value4 ) / ( value6 - value4 );
-//            vlist[7] = points[pz].clone().lerpSelf( points[pyz], mu );
-            vlist[7] = lerpSelf(points[pz], points[pyz], mu );
+                values[hx2 + size * hy2 + size2 * hz2] += addStrength;
+                values[(hx2 + size * hy2 + size2 * hz2) + size] += addStrength * 0.1f; // affect above point also
 
-        }
-        // vertical lines of the cube
-        if ( bits & 256 )
-        {
-            mu = ( isolevel - value0 ) / ( value4 - value0 );
-//            vlist[8] = points[p].clone().lerpSelf( points[pz], mu );
-            vlist[8] = lerpSelf(points[p], points[pz], mu );
-
-        }
-        if ( bits & 512 )
-        {
-            mu = ( isolevel - value1 ) / ( value5 - value1 );
-//            vlist[9] = points[px].clone().lerpSelf( points[pxz], mu );
-            vlist[9] = lerpSelf(points[px], points[pxz], mu );
-
-        }
-        if ( bits & 1024 )
-        {
-            mu = ( isolevel - value3 ) / ( value7 - value3 );
-//            vlist[10] = points[pxy].clone().lerpSelf( points[pxyz], mu );
-            vlist[10] = lerpSelf(points[pxy], points[pxyz], mu );
-        }
-      
-        //print (bits & 2048);
-      
-        if ( bits & 2048 )
-        {
-            mu = ( isolevel - value2 ) / ( value6 - value2 );
-//            vlist[11] = points[py].clone().lerpSelf( points[pyz], mu );
-            vlist[11] = lerpSelf(points[py], points[pyz], mu );
-            //print (vlist[10]);
-        }
-      
-        // construct triangles -- get correct vertices from triTable.
-        //var i = 0;
-        var i = 0;
-        cubeindex <<= 4;  // multiply by 16...
-      
-        // "Re-purpose cubeindex into an offset into triTable."
-        //  since each row really isn't a row.
-        
-        // the while loop should run at most 5 times,
-        //   since the 16th entry in each row is a -1.
-        while ( THREE_triTable[ cubeindex + i ] != -1 )
-        {
-            var index1:int = THREE_triTable[cubeindex + i];
-            var index2:int = THREE_triTable[cubeindex + i + 1];
-            var index3:int = THREE_triTable[cubeindex + i + 2];
-
-            vertices.Add(vlist[index1]);
-            vertices.Add(vlist[index2]);
-            vertices.Add(vlist[index3]);
-          
-            triangles.Add(vertexIndex);
-            triangles.Add(vertexIndex+1);
-            triangles.Add(vertexIndex+2);
-			
-			rr=1-rr; // temp variable.. every 2nd UV set is different order..
-
-			if (rr==0)
-			{
-				uvs.Add(Vector2 (0, 0));
-				uvs.Add(Vector2 (0, 1));
-				uvs.Add(Vector2 (1, 1));
-			}else{
-				uvs.Add(Vector2 (1, 0));
-				uvs.Add(Vector2 (0, 0));
-				uvs.Add(Vector2 (1, 1));
-			}
-
-            vertexIndex += 3;
-            i += 3;
+                CreateChunk();
+            }
         }
     }
-    
-     // Build the Mesh:
-    //var mesh : Mesh = GetComponent(MeshFilter).mesh;
-    geometry.Clear();
-  
-    geometry.vertices = vertices.ToArray();
-    geometry.triangles = triangles.ToArray();
-    geometry.uv = uvs.ToArray();
-  
-    geometry.RecalculateNormals();
-//    geometry.Optimize();
-    // update mesh collider (if needed?)
-    GetComponent(MeshCollider).sharedMesh = null;
-    GetComponent(MeshCollider).sharedMesh = geometry;
-    
- 
-    vertices.Clear();
-    uvs.Clear();
-    triangles.Clear();
-}
-
-
-function lerpSelf(o:Vector3, v:Vector3, alpha:float):Vector3
-{
-    o.x += ( v.x - o.x ) * alpha;
-    o.y += ( v.y - o.y ) * alpha;
-    o.z += ( v.z - o.z ) * alpha;
-    return o;
-
-}
 
 
 
+    void InitializePlainVoxelPlane()
+    {
+        for (var k = 0; k < size; k++) // z - blue
+            for (var j = 0; j < size; j++) // y - green
+                for (var i = 0; i < size; i++) // x - red
+                {
+                    // actual values
+                    float x = axisMin + axisRange * i / (size - 1);
+                    float y = axisMin + axisRange * j / (size - 1);
+                    float z = axisMin + axisRange * k / (size - 1);
 
-/////////////////////////////////////
-// Marching cubes lookup tables
-/////////////////////////////////////
+                    points.Add(new Vector3(x, y, z));
+                    var value = -1;
+                    float wall = 0;
+                    //if (k==0) value=wall;
+                    if (j == 0) value = (int)wall; // make wall on y==0
+                                                   //if (i==0) value=wall;
+                                                   //if (k==size-1) value=wall;
+                                                   //if (j==size-1) value=wall;
+                                                   //if (i==size-1) value=wall;
 
-// These tables are straight from Paul Bourke's page:
-// http://local.wasp.uwa.edu.au/~pbourke/geometry/polygonise/
-// who in turn got them from Cory Gene Bloyd.
+                    values.Add(value);
+                }
+    }
 
-//THREE.edgeTable = new Int32Array([
-private var THREE_edgeTable:int[] = [
+
+    void CreateChunk()
+    {
+        var rr = 0; // temp variable for uv map direction swapper..
+
+        var vertexIndex = 0;
+
+        for (var z = 0; z < size - 1; z++)
+            for (var y = 0; y < size - 1; y++)
+                for (var x = 0; x < size - 1; x++)
+                {
+                    // index of base point, and also adjacent points on cube
+                    float p = x + size * y + size2 * z;
+                    float px = p + 1;
+                    float py = p + size;
+                    float pxy = py + 1;
+                    float pz = p + size2;
+                    float pxz = px + size2;
+                    float pyz = py + size2;
+                    float pxyz = pxy + size2;
+
+                    // store scalar values corresponding to vertices
+                    float value0 = values[(int)p];
+                    float value1 = values[(int)px];
+                    float value2 = values[(int)py];
+                    float value3 = values[(int)pxy];
+                    float value4 = values[(int)pz];
+                    float value5 = values[(int)pxz];
+                    float value6 = values[(int)pyz];
+                    float value7 = values[(int)pxyz];
+
+                    // place a "1" in bit positions corresponding to vertices whose
+                    //   isovalue is less than given constant.
+
+                    int cubeindex = 0;
+
+                    // if no type for ^ error:
+                    // Assets/MarchingCubes/MarchingCubesA.js(77,29): BCE0051: Operator '<' cannot be used with a left hand side of type 'Object' and a right hand side of type 'int'.
+
+                    if (value0 < isolevel) cubeindex |= 1;
+                    if (value1 < isolevel) cubeindex |= 2;
+                    if (value2 < isolevel) cubeindex |= 8;
+                    if (value3 < isolevel) cubeindex |= 4;
+                    if (value4 < isolevel) cubeindex |= 16;
+                    if (value5 < isolevel) cubeindex |= 32;
+                    if (value6 < isolevel) cubeindex |= 128;
+                    if (value7 < isolevel) cubeindex |= 64;
+
+                    // bits = 12 bit number, indicates which edges are crossed by the isosurface
+                    int bits = THREE_edgeTable[cubeindex];
+
+                    // if none are crossed, proceed to next iteration
+                    if (bits == 0) continue;
+
+                    // check which edges are crossed, and estimate the point location
+                    //    using a weighted average of scalar values at edge endpoints.
+                    // store the vertex in an array for use later.
+                    float mu = 0.5f;
+
+                    // bottom of the cube
+                    //if (bits & 1)
+                    if ((bits & 1) != 0)
+                    {
+                        mu = (isolevel - value0) / (value1 - value0);
+                        //vlist[0] = points[p].clone().lerpSelf( points[px], mu );
+                        vlist[0] = lerpSelf(points[(int)p], points[(int)px], mu);
+
+
+                    }
+                    if ((bits & 2) != 0)
+                    {
+                        mu = (isolevel - value1) / (value3 - value1);
+                        //            vlist[1] = points[px].clone().lerpSelf( points[pxy], mu );
+                        vlist[1] = lerpSelf(points[(int)px], points[(int)pxy], mu);
+                    }
+                    if ((bits & 4) != 0)
+                    {
+                        mu = (isolevel - value2) / (value3 - value2);
+                        //            vlist[2] = points[py].clone().lerpSelf( points[pxy], mu );
+                        vlist[2] = lerpSelf(points[(int)py], points[(int)pxy], mu);
+
+                    }
+                    if ((bits & 8) != 0)
+                    {
+                        mu = (isolevel - value0) / (value2 - value0);
+                        //            vlist[3] = points[p].clone().lerpSelf( points[py], mu );
+                        vlist[3] = lerpSelf(points[(int)p], points[(int)py], mu);
+
+                    }
+                    // top of the cube
+                    if ((bits & 16) != 0)
+                    {
+                        mu = (isolevel - value4) / (value5 - value4);
+                        //            vlist[4] = points[pz].clone().lerpSelf( points[pxz], mu );
+                        vlist[4] = lerpSelf(points[(int)pz], points[(int)pxz], mu);
+
+                    }
+                    if ((bits & 32) != 0)
+                    {
+                        mu = (isolevel - value5) / (value7 - value5);
+                        //            vlist[5] = points[pxz].clone().lerpSelf( points[pxyz], mu );
+                        vlist[5] = lerpSelf(points[(int)pxz], points[(int)pxyz], mu);
+
+                    }
+                    if ((bits & 64) != 0)
+                    {
+                        mu = (isolevel - value6) / (value7 - value6);
+                        //            vlist[6] = points[pyz].clone().lerpSelf( points[pxyz], mu );
+                        vlist[6] = lerpSelf(points[(int)pyz], points[(int)pxyz], mu);
+                    }
+                    if ((bits & 128) != 0)
+                    {
+                        mu = (isolevel - value4) / (value6 - value4);
+                        //            vlist[7] = points[pz].clone().lerpSelf( points[pyz], mu );
+                        vlist[7] = lerpSelf(points[(int)pz], points[(int)pyz], mu);
+
+                    }
+                    // vertical lines of the cube
+                    if ((bits & 256) != 0)
+                    {
+                        mu = (isolevel - value0) / (value4 - value0);
+                        //            vlist[8] = points[p].clone().lerpSelf( points[pz], mu );
+                        vlist[8] = lerpSelf(points[(int)p], points[(int)pz], mu);
+
+                    }
+                    if ((bits & 512) != 0)
+                    {
+                        mu = (isolevel - value1) / (value5 - value1);
+                        //            vlist[9] = points[px].clone().lerpSelf( points[pxz], mu );
+                        vlist[9] = lerpSelf(points[(int)px], points[(int)pxz], mu);
+
+                    }
+                    if ((bits & 1024) != 0)
+                    {
+                        mu = (isolevel - value3) / (value7 - value3);
+                        //            vlist[10] = points[pxy].clone().lerpSelf( points[pxyz], mu );
+                        vlist[10] = lerpSelf(points[(int)pxy], points[(int)pxyz], mu);
+                    }
+
+                    //print (bits & 2048);
+
+                    if ((bits & 2048) != 0)
+                    {
+                        mu = (isolevel - value2) / (value6 - value2);
+                        //            vlist[11] = points[py].clone().lerpSelf( points[pyz], mu );
+                        vlist[11] = lerpSelf(points[(int)py], points[(int)pyz], mu);
+                        //print (vlist[10]);
+                    }
+
+                    // construct triangles -- get correct vertices from triTable.
+                    //var i = 0;
+                    var i = 0;
+                    cubeindex <<= 4;  // multiply by 16...
+
+                    // "Re-purpose cubeindex into an offset into triTable."
+                    //  since each row really isn't a row.
+
+                    // the while loop should run at most 5 times,
+                    //   since the 16th entry in each row is a -1.
+                    while (THREE_triTable[cubeindex + i] != -1)
+                    {
+                        int index1 = THREE_triTable[cubeindex + i];
+                        int index2 = THREE_triTable[cubeindex + i + 1];
+                        int index3 = THREE_triTable[cubeindex + i + 2];
+
+                        vertices.Add(vlist[index1]);
+                        vertices.Add(vlist[index2]);
+                        vertices.Add(vlist[index3]);
+
+                        triangles.Add(vertexIndex);
+                        triangles.Add(vertexIndex + 1);
+                        triangles.Add(vertexIndex + 2);
+
+                        rr = 1 - rr; // temp variable.. every 2nd UV set is different order..
+
+                        if (rr == 0)
+                        {
+                            uvs.Add(new Vector2(0, 0));
+                            uvs.Add(new Vector2(0, 1));
+                            uvs.Add(new Vector2(1, 1));
+                        } else
+                        {
+                            uvs.Add(new Vector2(1, 0));
+                            uvs.Add(new Vector2(0, 0));
+                            uvs.Add(new Vector2(1, 1));
+                        }
+
+                        vertexIndex += 3;
+                        i += 3;
+                    }
+                }
+
+        // Build the Mesh:
+        geometry.Clear();
+
+        geometry.vertices = vertices.ToArray();
+        geometry.triangles = triangles.ToArray();
+        geometry.uv = uvs.ToArray();
+
+        geometry.RecalculateNormals();
+        //    geometry.Optimize();
+        // update mesh collider (if needed?)
+        GetComponent<MeshCollider>().sharedMesh = null;
+        GetComponent<MeshCollider>().sharedMesh = geometry;
+
+
+        vertices.Clear();
+        uvs.Clear();
+        triangles.Clear();
+    }
+
+
+    Vector3 lerpSelf(Vector3 o, Vector3 v, float alpha)
+    {
+        o.x += (v.x - o.x) * alpha;
+        o.y += (v.y - o.y) * alpha;
+        o.z += (v.z - o.z) * alpha;
+        return o;
+
+    }
+
+
+
+
+    /////////////////////////////////////
+    // Marching cubes lookup tables
+    /////////////////////////////////////
+
+    // These tables are straight from Paul Bourke's page:
+    // http://local.wasp.uwa.edu.au/~pbourke/geometry/polygonise/
+    // who in turn got them from Cory Gene Bloyd.
+
+    //THREE.edgeTable = new Int32Array([
+    private int[] THREE_edgeTable = {
 0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
 0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
 0x190, 0x99 , 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
@@ -430,10 +447,10 @@ private var THREE_edgeTable:int[] = [
 0xe90, 0xf99, 0xc93, 0xd9a, 0xa96, 0xb9f, 0x895, 0x99c,
 0x69c, 0x795, 0x49f, 0x596, 0x29a, 0x393, 0x99 , 0x190,
 0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c,
-0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0];
+0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0 };
 
 
-private var THREE_triTable:int[] = [
+    private int[] THREE_triTable = {
 -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -689,4 +706,5 @@ private var THREE_triTable:int[] = [
 1, 3, 8, 9, 1, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 0, 9, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
--1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1];
+-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+}
